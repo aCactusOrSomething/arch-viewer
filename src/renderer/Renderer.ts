@@ -1,4 +1,7 @@
 import { load3dm } from "../loader/Loader";
+import getPipeline from "./pipelines/Pipeline";
+import type { Vertex } from "./Vertex";
+import shader from './shaders/shader.wgsl?raw'
 
 export class Renderer {
     canvasRef: HTMLCanvasElement
@@ -23,54 +26,6 @@ export class Renderer {
             format: presentationFormat,
         });
 
-        const module = device.createShaderModule({
-            label: 'debug shaders',
-            code: /* wgsl */ `
-                struct VertexOutput {
-                    @builtin(position) position: vec4f,
-                    @location(0) color: vec4f,
-                };
-
-                @vertex fn vs(
-                    @builtin(vertex_index) vertexIndex: u32
-                ) -> VertexOutput {
-                    let pos = array(
-                        vec2f( 0.0,  0.5),
-                        vec2f(-0.5, -0.5),
-                        vec2f( 0.5, -0.5),
-                    );
-                    var color = array<vec4f, 3>(
-                        vec4f(1, 0, 0, 1),
-                        vec4f(0, 1, 0, 1),
-                        vec4f(0, 0, 1, 1),
-                    );
-
-                    var output: VertexOutput;
-                    output.position = vec4f(pos[vertexIndex], 0.0, 1.0);
-                    output.color = color[vertexIndex];
-                    return output;
-                }
-
-                @fragment fn fs(fsInput: VertexOutput) -> @location(0) vec4f {
-                    return fsInput.color;
-                }
-            `,
-        });
-
-        const pipeline = device.createRenderPipeline({
-            label: 'debug pipeline',
-            layout: 'auto',
-            vertex: {
-                entryPoint: 'vs',
-                module,
-            },
-            fragment: {
-                entryPoint: 'fs',
-                module,
-                targets: [{ format: presentationFormat }],
-            },
-        });
-
         const renderPassDescriptor: GPURenderPassDescriptor = {
             label: 'basic debug render pass',
             colorAttachments: [
@@ -83,13 +38,33 @@ export class Renderer {
             ],
         }
 
+        const module = device.createShaderModule({
+        label: 'debug shaders',
+        code: shader,
+    });
+
+        const pipeline = getPipeline(device, presentationFormat, module);
+
+        const vertices: Array<Vertex> = [
+            { position: new Float32Array([0.0, 0.5, 0.0]), color: new Float32Array([1.0, 0.0, 0.0]) },
+            { position: new Float32Array([-0.5, -0.5, 0.0]), color: new Float32Array([0.0, 1.0, 0.0]) },
+            { position: new Float32Array([0.5, -0.5, 0.0]), color: new Float32Array([0.0, 0.0, 1.0]) },
+        ]
+
+        let vertex_buffer = device.createBuffer(
+            {
+                label: "Vertex Buffer",
+                size: 0,
+                usage: GPUBufferUsage.VERTEX
+            }
+        )
+
         function render() {
             // Get the current texture from the canvas context and
             // set it as the texture to render to.
             for (const attachment of renderPassDescriptor.colorAttachments) {
                 attachment!.view = context!.getCurrentTexture().createView();
             }
-
 
             // make a command encoder to start encoding commands
             const encoder = device!.createCommandEncoder({ label: 'our encoder' });
@@ -103,7 +78,7 @@ export class Renderer {
             const commandBuffer = encoder.finish();
             device!.queue.submit([commandBuffer]);
         }
-        
+
         load3dm();
 
         const observer = new ResizeObserver(entries => {

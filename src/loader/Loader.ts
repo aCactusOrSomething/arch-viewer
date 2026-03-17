@@ -18,12 +18,16 @@ export async function load3dm() {
     let doc = rhino.File3dm.fromByteArray(arr);
 
     let objects = doc.objects();
+    let output: Array<object> = [];
     for (let i = 0; i < objects.count; i++) {
         let mesh = objects.get(i).geometry();
         if (mesh instanceof rhino.Mesh) {
             // eventually this converts the meshes into a compatible format
             // but for now, i just want to print the files themselves.
-            console.log(mesh.toThreejsJSON())
+            let json = mesh.toThreejsJSON();
+            output.push(json)
         }
     }
+    console.log(output)
+    return output;
 }

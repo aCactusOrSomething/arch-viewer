@@ -7,10 +7,11 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const renderRef = useRenderer(canvasRef);
 
-  return (
+  return (<>
+    <h2>rhino 3dm model demo:</h2>
     <canvas ref={canvasRef} />
-
-  )
+    <i>(if you don't see a cool animal head logo, its not working.)</i>
+  </>)
 }
 
 export default App
