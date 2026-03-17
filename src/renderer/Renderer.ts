@@ -4,7 +4,7 @@ import shader from './shaders/shader.wgsl?raw'
 
 export class Renderer {
     canvasRef: HTMLCanvasElement
-    device: GPUDevice |undefined | null = null;
+    device: GPUDevice | undefined | null = null;
     private initPromise: Promise<void> | null = null;
 
     constructor(canvasRef: HTMLCanvasElement) {
@@ -21,7 +21,7 @@ export class Renderer {
         if (this.device) return;
         // request our basic setup stuff
         const adapter = await navigator.gpu?.requestAdapter();
-        this.device = await adapter?.requestDevice({label: 'main-device'});
+        this.device = await adapter?.requestDevice({ label: 'main-device' });
         const device = this.device;
 
         if (!device) {
@@ -55,19 +55,24 @@ export class Renderer {
 
         const meshJson = await load3dm() as any;
 
-        const positions = new Float32Array(meshJson[0].data.attributes.position.array);
-        // triangle for debug purposes
-        // const positions = new Float32Array([    0.0, 0.5, 0, -0.5, -0.5, 0, 0.5, -0.5, 0 ]); 
-        
-        const vertexBuffer = device.createBuffer({
-            size: positions.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-        });
-        device.queue.writeBuffer(vertexBuffer, 0, positions);
+        const positions: Array<Float32Array<ArrayBuffer>> = [];
+        const vertexBuffers: Array<GPUBuffer> = [];
+        for (let i in meshJson) {
+            let mesh = new Float32Array(meshJson[i].data.attributes.position.array);
+            const vertexBuffer = device.createBuffer({
+                size: mesh.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+            });
+            positions.push(mesh);
+            vertexBuffers.push(vertexBuffer);
+            device.queue.writeBuffer(vertexBuffer, 0, mesh);
+        }
+
+
 
         const pipeline = getPipeline(device, presentationFormat, module);
 
-        function render(canvas: HTMLCanvasElement) {
+        function render(canvas: HTMLCanvasElement, device: GPUDevice) {
             // Get the current texture from the canvas context and
             // set it as the texture to render to.
             for (const attachment of renderPassDescriptor.colorAttachments) {
@@ -80,17 +85,19 @@ export class Renderer {
             // make a render pass encoder to encode render specific commands
             const pass = encoder.beginRenderPass(renderPassDescriptor);
             pass.setPipeline(pipeline);
+            for (let i in vertexBuffers) {
+                const vertexBuffer = vertexBuffers[i];
+                const position = positions[i];
+                pass.setVertexBuffer(0, vertexBuffer);
+                pass.draw(position.length / 3)  // call our vertex shader 
 
-            pass.setVertexBuffer(0, vertexBuffer);
-
-            pass.draw(positions.length / 3)  // call our vertex shader 
+            }
             pass.end();
-
             const commandBuffer = encoder.finish();
             device!.queue.submit([commandBuffer]);
         }
 
-        
+
 
         const observer = new ResizeObserver(entries => {
             for (const entry of entries) {
@@ -103,7 +110,7 @@ export class Renderer {
                     canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
                 }
             }
-            render(this.canvasRef);
+            render(this.canvasRef, this.device!);
         });
 
         observer.observe(this.canvasRef);

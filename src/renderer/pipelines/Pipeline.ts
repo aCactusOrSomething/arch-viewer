@@ -13,7 +13,7 @@ export default function getPipeline(device: GPUDevice, presentationFormat: GPUTe
                     offset: 0,
                     format: 'float32x3'
                 }],
-                
+
             }]
         },
         fragment: {
@@ -22,7 +22,7 @@ export default function getPipeline(device: GPUDevice, presentationFormat: GPUTe
             targets: [{ format: presentationFormat }],
         },
         primitive: {
-            topology: 'triangle-list',
+            topology: 'point-list',
             cullMode: 'none',
         }
     });

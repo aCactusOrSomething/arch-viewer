@@ -10,8 +10,7 @@ struct VertexOutput {
 
     var output: VertexOutput;
 
-    let scaled = position * 0.00001;
-    output.position = vec4f(scaled.xyz, 1.0);
+    output.position = vec4f(position.xzy * 0.05,  1.0);
     output.color = vec4f(0.0, 1.0, 0.0, 1.0);
     return output;
 }
