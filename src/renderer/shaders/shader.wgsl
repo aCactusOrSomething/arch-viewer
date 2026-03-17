@@ -1,29 +1,18 @@
-struct VertexInput {
-    color: vec4f,
-    scale: vec2f,
-    offset: vec2f,
-};
-@group(0) @binding(0) var<uniform> vertexInput: VertexInput;
-
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) color: vec4f,
 };
 
+
 @vertex fn vs(
-    @builtin(vertex_index) vertexIndex: u32
+    @location(0) position: vec3f
 ) -> VertexOutput {
-    let pos = array(
-        vec2f( 0.0,  0.5),
-        vec2f(-0.5, -0.5),
-        vec2f( 0.5, -0.5),
-    );
 
     var output: VertexOutput;
-    output.position = vec4f(
-        pos[vertexIndex]* vertexInput.scale + vertexInput.offset,
-         0.0, 1.0);
-    output.color = vertexInput.color;
+
+    let scaled = position * 0.00001;
+    output.position = vec4f(scaled.xyz, 1.0);
+    output.color = vec4f(0.0, 1.0, 0.0, 1.0);
     return output;
 }
 

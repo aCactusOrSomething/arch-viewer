@@ -1,19 +1,29 @@
 import { load3dm } from "../loader/Loader";
 import getPipeline from "./pipelines/Pipeline";
-import type { Vertex } from "./Vertex";
 import shader from './shaders/shader.wgsl?raw'
 
 export class Renderer {
     canvasRef: HTMLCanvasElement
+    device: GPUDevice |undefined | null = null;
+    private initPromise: Promise<void> | null = null;
 
     constructor(canvasRef: HTMLCanvasElement) {
         this.canvasRef = canvasRef;
     }
 
     async init() {
+        if (this.initPromise) return this.initPromise;
+        this.initPromise = this._init();
+        return this.initPromise;
+    }
+
+    private async _init() {
+        if (this.device) return;
         // request our basic setup stuff
         const adapter = await navigator.gpu?.requestAdapter();
-        const device = await adapter?.requestDevice();
+        this.device = await adapter?.requestDevice({label: 'main-device'});
+        const device = this.device;
+
         if (!device) {
             throw new Error("This browser does not support webGPU, and a webGL fallback isn't implemented.")
         }
@@ -39,27 +49,25 @@ export class Renderer {
         }
 
         const module = device.createShaderModule({
-        label: 'debug shaders',
-        code: shader,
-    });
+            label: 'debug shaders',
+            code: shader,
+        });
+
+        const meshJson = await load3dm() as any;
+
+        const positions = new Float32Array(meshJson[0].data.attributes.position.array);
+        // triangle for debug purposes
+        // const positions = new Float32Array([    0.0, 0.5, 0, -0.5, -0.5, 0, 0.5, -0.5, 0 ]); 
+        
+        const vertexBuffer = device.createBuffer({
+            size: positions.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+        });
+        device.queue.writeBuffer(vertexBuffer, 0, positions);
 
         const pipeline = getPipeline(device, presentationFormat, module);
 
-        const vertices: Array<Vertex> = [
-            { position: new Float32Array([0.0, 0.5, 0.0]), color: new Float32Array([1.0, 0.0, 0.0]) },
-            { position: new Float32Array([-0.5, -0.5, 0.0]), color: new Float32Array([0.0, 1.0, 0.0]) },
-            { position: new Float32Array([0.5, -0.5, 0.0]), color: new Float32Array([0.0, 0.0, 1.0]) },
-        ]
-
-        let vertex_buffer = device.createBuffer(
-            {
-                label: "Vertex Buffer",
-                size: 0,
-                usage: GPUBufferUsage.VERTEX
-            }
-        )
-
-        function render() {
+        function render(canvas: HTMLCanvasElement) {
             // Get the current texture from the canvas context and
             // set it as the texture to render to.
             for (const attachment of renderPassDescriptor.colorAttachments) {
@@ -72,14 +80,17 @@ export class Renderer {
             // make a render pass encoder to encode render specific commands
             const pass = encoder.beginRenderPass(renderPassDescriptor);
             pass.setPipeline(pipeline);
-            pass.draw(3);  // call our vertex shader 3 times
+
+            pass.setVertexBuffer(0, vertexBuffer);
+
+            pass.draw(positions.length / 3)  // call our vertex shader 
             pass.end();
 
             const commandBuffer = encoder.finish();
             device!.queue.submit([commandBuffer]);
         }
 
-        load3dm();
+        
 
         const observer = new ResizeObserver(entries => {
             for (const entry of entries) {
@@ -92,13 +103,15 @@ export class Renderer {
                     canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
                 }
             }
-            render();
+            render(this.canvasRef);
         });
 
         observer.observe(this.canvasRef);
     }
 
     destroy() {
-        throw new Error("Method not implemented.");
+        this.device?.destroy();
+        this.device = null;
+        this.initPromise = null;
     }
 }

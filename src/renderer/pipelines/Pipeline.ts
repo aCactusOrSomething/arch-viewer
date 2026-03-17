@@ -5,13 +5,26 @@ export default function getPipeline(device: GPUDevice, presentationFormat: GPUTe
         layout: 'auto',
         vertex: {
             entryPoint: 'vs',
-            module,
+            module: module,
+            buffers: [{
+                arrayStride: 12,
+                attributes: [{
+                    shaderLocation: 0,
+                    offset: 0,
+                    format: 'float32x3'
+                }],
+                
+            }]
         },
         fragment: {
             entryPoint: 'fs',
             module,
             targets: [{ format: presentationFormat }],
         },
+        primitive: {
+            topology: 'triangle-list',
+            cullMode: 'none',
+        }
     });
 
     return pipeline;
