@@ -1,3 +1,5 @@
+import { load3dm } from "../loader/Loader";
+
 export class Renderer {
     canvasRef: HTMLCanvasElement
 
@@ -24,19 +26,33 @@ export class Renderer {
         const module = device.createShaderModule({
             label: 'debug shaders',
             code: /* wgsl */ `
+                struct VertexOutput {
+                    @builtin(position) position: vec4f,
+                    @location(0) color: vec4f,
+                };
+
                 @vertex fn vs(
                     @builtin(vertex_index) vertexIndex: u32
-                ) -> @builtin(position) vec4f {
+                ) -> VertexOutput {
                     let pos = array(
                         vec2f( 0.0,  0.5),
                         vec2f(-0.5, -0.5),
-                        vec2f( 0.5, -0.5)
+                        vec2f( 0.5, -0.5),
                     );
-                    return vec4f(pos[vertexIndex], 0.0, 1.0);
+                    var color = array<vec4f, 3>(
+                        vec4f(1, 0, 0, 1),
+                        vec4f(0, 1, 0, 1),
+                        vec4f(0, 0, 1, 1),
+                    );
+
+                    var output: VertexOutput;
+                    output.position = vec4f(pos[vertexIndex], 0.0, 1.0);
+                    output.color = color[vertexIndex];
+                    return output;
                 }
 
-                @fragment fn fs() -> @location(0) vec4f {
-                    return vec4f(1.0, 0.0, 0.0, 1.0);
+                @fragment fn fs(fsInput: VertexOutput) -> @location(0) vec4f {
+                    return fsInput.color;
                 }
             `,
         });
@@ -87,6 +103,8 @@ export class Renderer {
             const commandBuffer = encoder.finish();
             device!.queue.submit([commandBuffer]);
         }
+        
+        load3dm();
 
         const observer = new ResizeObserver(entries => {
             for (const entry of entries) {
