@@ -16,7 +16,7 @@ struct VertexOutput {
     var output: VertexOutput;
 
     output.position = vec4f(model.position.xzy * 0.05,  1.0);
-    output.color = vec4f(model.normal, 1.0);
+    output.color = vec4f(model.uv, 0.0, 1.0);
     return output;
 }
 

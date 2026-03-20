@@ -55,9 +55,7 @@ export class Renderer {
 
         const meshJson = await load3dm() as any;
 
-        const positions: Array<Float32Array<ArrayBuffer>> = [];
-        const normals: Array<Float32Array<ArrayBuffer>> = [];
-        const uvs: Array<Float32Array<ArrayBuffer>> = [];
+
         const vertexBuffers: Array<GPUBuffer> = [];
         const indexBuffers: Array<GPUBuffer> = [];
         const indexLists: Array<Uint16Array> = [];
@@ -89,13 +87,10 @@ export class Renderer {
                 mergedData[j * 8 + 4] = normalData[j * 3 + 1];
                 mergedData[j * 8 + 5] = normalData[j * 3 + 2];
                 
-                mergedData[j * 8 + 6] = uvData[j * 3 + 0];
-                mergedData[j * 8 + 7] = uvData[j * 3 + 1];
+                mergedData[j * 8 + 6] = uvData[j * 2 + 0];
+                mergedData[j * 8 + 7] = uvData[j * 2 + 1];
             }
 
-            positions.push(positionData);
-            normals.push(normalData);
-            uvs.push(uvData);
             indexLists.push(indices);
             vertexBuffers.push(vertexBuffer);
             indexBuffers.push(indexBuffer);
