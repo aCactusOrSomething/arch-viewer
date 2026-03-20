@@ -56,16 +56,51 @@ export class Renderer {
         const meshJson = await load3dm() as any;
 
         const positions: Array<Float32Array<ArrayBuffer>> = [];
+        const normals: Array<Float32Array<ArrayBuffer>> = [];
+        const uvs: Array<Float32Array<ArrayBuffer>> = [];
         const vertexBuffers: Array<GPUBuffer> = [];
+        const indexBuffers: Array<GPUBuffer> = [];
+        const indexLists: Array<Uint16Array> = [];
         for (let i in meshJson) {
-            let mesh = new Float32Array(meshJson[i].data.attributes.position.array);
+            let positionData = new Float32Array(meshJson[i].data.attributes.position.array);
+            let normalData = new Float32Array(meshJson[i].data.attributes.normal.array);
+            let uvData = new Float32Array(meshJson[i].data.attributes.uv.array);
             const vertexBuffer = device.createBuffer({
-                size: mesh.byteLength,
+                size: positionData.byteLength + normalData.byteLength + uvData.byteLength,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
             });
-            positions.push(mesh);
+            const indices = new Uint16Array(meshJson[i].data.index.array);
+
+            const indexBuffer = device.createBuffer({
+                size: indices.byteLength,
+                usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
+            });
+
+            // merge the data into one big array
+            const count = positionData.length / 3;
+            const mergedData = new Float32Array(count * 8);
+
+            for(let j = 0; j < count; j++) {
+                mergedData[j * 8 + 0] = positionData[j * 3 + 0];
+                mergedData[j * 8 + 1] = positionData[j * 3 + 1];
+                mergedData[j * 8 + 2] = positionData[j * 3 + 2];
+
+                mergedData[j * 8 + 3] = normalData[j * 3 + 0];
+                mergedData[j * 8 + 4] = normalData[j * 3 + 1];
+                mergedData[j * 8 + 5] = normalData[j * 3 + 2];
+                
+                mergedData[j * 8 + 6] = uvData[j * 3 + 0];
+                mergedData[j * 8 + 7] = uvData[j * 3 + 1];
+            }
+
+            positions.push(positionData);
+            normals.push(normalData);
+            uvs.push(uvData);
+            indexLists.push(indices);
             vertexBuffers.push(vertexBuffer);
-            device.queue.writeBuffer(vertexBuffer, 0, mesh);
+            indexBuffers.push(indexBuffer);
+            device.queue.writeBuffer(vertexBuffer, 0, mergedData);
+            device.queue.writeBuffer(indexBuffer, 0, indices);
         }
 
 
@@ -87,9 +122,11 @@ export class Renderer {
             pass.setPipeline(pipeline);
             for (let i in vertexBuffers) {
                 const vertexBuffer = vertexBuffers[i];
-                const position = positions[i];
+                const indices = indexLists[i];
+                const indexBuffer = indexBuffers[i];
                 pass.setVertexBuffer(0, vertexBuffer);
-                pass.draw(position.length / 3)  // call our vertex shader 
+                pass.setIndexBuffer(indexBuffer, 'uint16');
+                pass.drawIndexed(indices.length)  // call our vertex shader 
 
             }
             pass.end();

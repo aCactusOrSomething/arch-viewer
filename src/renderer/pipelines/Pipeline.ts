@@ -7,12 +7,24 @@ export default function getPipeline(device: GPUDevice, presentationFormat: GPUTe
             entryPoint: 'vs',
             module: module,
             buffers: [{
-                arrayStride: 12,
-                attributes: [{
-                    shaderLocation: 0,
-                    offset: 0,
-                    format: 'float32x3'
-                }],
+                arrayStride: 4 * 8,
+                attributes: [
+                    {
+                        shaderLocation: 0,
+                        offset: 0,
+                        format: 'float32x3'
+                    },
+                    {
+                        shaderLocation: 1,
+                        offset: 4 * 3,
+                        format: 'float32x3'
+                    },
+                    {
+                        shaderLocation: 2,
+                        offset: 4 * 3 * 2,
+                        format: 'float32x2'
+                    },
+                ],
 
             }]
         },
@@ -22,8 +34,8 @@ export default function getPipeline(device: GPUDevice, presentationFormat: GPUTe
             targets: [{ format: presentationFormat }],
         },
         primitive: {
-            topology: 'point-list',
-            cullMode: 'none',
+            topology: 'triangle-list',
+            cullMode: 'front',
         }
     });
 
