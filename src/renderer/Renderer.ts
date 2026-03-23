@@ -56,7 +56,7 @@ export class Renderer {
         // make a command encoder to start encoding commands
         const encoder = this.device!.createCommandEncoder({ label: 'our encoder' });
 
-        
+
 
         // make a render pass encoder to encode render specific commands
         const pass = encoder.beginRenderPass(renderPassDescriptor);
@@ -115,9 +115,10 @@ export class Renderer {
         this.indexBuffers = [];
         this.indexLists = [];
         for (let i in meshJson) {
-            let positionData = new Float32Array(meshJson[i].data.attributes.position.array);
-            let normalData = new Float32Array(meshJson[i].data.attributes.normal.array);
-            let uvData = new Float32Array(meshJson[i].data.attributes.uv.array);
+            let segment = meshJson[i].data
+            let positionData = new Float32Array(segment.attributes.position.array);
+            let normalData = new Float32Array(segment.attributes.normal.array);
+            let uvData = ("uv" in segment.attributes) ? new Float32Array(segment.attributes.uv.array) : new Float32Array(segment.attributes.position.array.length);
             const vertexBuffer = device.createBuffer({
                 label: `vertex buffer for mesh ${i}`,
                 size: positionData.byteLength + normalData.byteLength + uvData.byteLength,
@@ -181,7 +182,7 @@ export class Renderer {
                     this.depthTexture!.resize(canvas.width, canvas.height)
                 }
             }
-            
+
             this.render();
 
         });

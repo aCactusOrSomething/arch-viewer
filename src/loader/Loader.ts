@@ -3,7 +3,6 @@
 import rhino3dm, { RhinoModule } from 'rhino3dm';
 import wasmUrl from 'rhino3dm/rhino3dm.wasm?url'
 const file = '/models/hello_mesh.3dm'
-
 export async function load3dm() {
     //wait until the rhino3dm library is loaded, then load the 3dm file
     const rhino = await (rhino3dm as any)({

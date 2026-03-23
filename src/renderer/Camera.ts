@@ -11,7 +11,7 @@ export class Camera {
 
     constructor(
         aspectRatio: number,
-        eye: Float32Array = new Float32Array([0, 5, 40]),
+        eye: Float32Array = new Float32Array([0, 10, 40]),
         target: Float32Array = new Float32Array([0, 0, 0]),
         up: Float32Array = new Float32Array([0, 1, 0]),
         fovY: number = Math.PI / 4,

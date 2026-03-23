@@ -14,7 +14,7 @@ export class DepthTexture implements Texture {
     private device: GPUDevice;
     private label: string;
 
-    constructor(device: GPUDevice, width:number, height: number, label: string) {
+    constructor(device: GPUDevice, width: number, height: number, label: string) {
         this.device = device;
         this.label = label;
         this.texture = this.build(width, height);
