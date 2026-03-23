@@ -5,7 +5,6 @@ export default function getPipeline(
     presentationFormat: GPUTextureFormat,
     module: GPUShaderModule,
     bindGroupLayouts: GPUBindGroupLayout[],
-    depthTexture: DepthTexture,
 ) {
     const pipelineLayout = device.createPipelineLayout({
         bindGroupLayouts: bindGroupLayouts

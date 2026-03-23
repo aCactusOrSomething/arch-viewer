@@ -165,7 +165,7 @@ export class Renderer {
 
         this.cameraBindGroup = CameraUniform.makeBindGroup(device, cameraBindGroupLayout, this.cameraBuffer);
 
-        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout], this.depthTexture);
+        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout]);
 
 
 
