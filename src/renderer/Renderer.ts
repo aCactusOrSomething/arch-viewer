@@ -2,6 +2,7 @@ import { load3dm } from "../loader/Loader";
 import { Camera, CameraUniform } from "./Camera";
 import getPipeline from "./pipelines/Pipeline";
 import shader from './shaders/shader.wgsl?raw'
+import { DepthTexture } from "./Texture";
 
 export class Renderer {
     canvasRef: HTMLCanvasElement
@@ -11,32 +12,54 @@ export class Renderer {
     private cameraUniform: CameraUniform | null = null;
     private cameraBuffer: GPUBuffer | null = null;
     private cameraBindGroup: GPUBindGroup | null = null;
-    private renderPassDescriptor: GPURenderPassDescriptor | null = null;
     private context: GPUCanvasContext | null = null;
     private pipeline: GPURenderPipeline | null = null;
     private vertexBuffers: Array<GPUBuffer> = [];
     private indexLists: Array<Uint16Array> = [];
     private indexBuffers: Array<GPUBuffer> = [];
+    private depthTexture: DepthTexture | null = null;
 
     constructor(canvasRef: HTMLCanvasElement) {
         this.canvasRef = canvasRef;
     }
 
     render() {
+
+        // render pass descriptor
+        let renderPassDescriptor: GPURenderPassDescriptor = {
+            label: 'basic debug render pass',
+            colorAttachments: [
+                {
+                    view: this.context!.getCurrentTexture().createView(),
+                    clearValue: [0.3, 0.3, 0.3, 1],
+                    loadOp: 'clear',
+                    storeOp: 'store',
+                },
+            ],
+            depthStencilAttachment: {
+                view: this.depthTexture!.view,
+                depthLoadOp: "clear",
+                depthStoreOp: "store",
+                depthClearValue: 1.0
+            }
+        }
+
         // update the camera
         this.cameraUniform!.updateViewProj(this.camera!);
         this.device!.queue.writeBuffer(this.cameraBuffer!, 0, this.cameraUniform!.viewProj)
         // Get the current texture from the canvas context and
         // set it as the texture to render to.
-        for (const attachment of this.renderPassDescriptor!.colorAttachments) {
+        for (const attachment of renderPassDescriptor!.colorAttachments) {
             attachment!.view = this.context!.getCurrentTexture().createView();
         }
 
         // make a command encoder to start encoding commands
         const encoder = this.device!.createCommandEncoder({ label: 'our encoder' });
 
+        
+
         // make a render pass encoder to encode render specific commands
-        const pass = encoder.beginRenderPass(this.renderPassDescriptor!);
+        const pass = encoder.beginRenderPass(renderPassDescriptor);
         pass.setPipeline(this.pipeline!);
         pass.setBindGroup(0, this.cameraBindGroup, []);
         for (let i in this.vertexBuffers) {
@@ -78,17 +101,7 @@ export class Renderer {
             format: presentationFormat,
         });
 
-        this.renderPassDescriptor = {
-            label: 'basic debug render pass',
-            colorAttachments: [
-                {
-                    view: this.context!.getCurrentTexture().createView(),
-                    clearValue: [0.3, 0.3, 0.3, 1],
-                    loadOp: 'clear',
-                    storeOp: 'store',
-                },
-            ],
-        }
+        this.depthTexture = new DepthTexture(this.device!, this.context!.canvas.width, this.context!.canvas.height, "depth texture");
 
         const module = device.createShaderModule({
             label: 'debug shaders',
@@ -151,10 +164,8 @@ export class Renderer {
         const cameraBindGroupLayout = CameraUniform.makeBindGroupLayout(device);
 
         this.cameraBindGroup = CameraUniform.makeBindGroup(device, cameraBindGroupLayout, this.cameraBuffer);
-        console.log("view projection: " + Array.from(this.cameraUniform.viewProj))
 
-
-        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout]);
+        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout], this.depthTexture);
 
 
 
@@ -167,8 +178,10 @@ export class Renderer {
 
                     canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
                     canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
+                    this.depthTexture!.resize(canvas.width, canvas.height)
                 }
             }
+            
             this.render();
 
         });

@@ -1,8 +1,11 @@
+import { DepthTexture } from "../Texture";
+
 export default function getPipeline(
     device: GPUDevice,
     presentationFormat: GPUTextureFormat,
     module: GPUShaderModule,
-    bindGroupLayouts: GPUBindGroupLayout[]
+    bindGroupLayouts: GPUBindGroupLayout[],
+    depthTexture: DepthTexture,
 ) {
     const pipelineLayout = device.createPipelineLayout({
         bindGroupLayouts: bindGroupLayouts
@@ -44,6 +47,11 @@ export default function getPipeline(
         primitive: {
             topology: 'triangle-list',
             cullMode: 'front',
+        },
+        depthStencil: {
+            format: DepthTexture.DEPTH_FORMAT,
+            depthWriteEnabled: true,
+            depthCompare: "less",
         }
     });
 
