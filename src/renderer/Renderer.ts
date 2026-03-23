@@ -7,9 +7,50 @@ export class Renderer {
     canvasRef: HTMLCanvasElement
     device: GPUDevice | undefined | null = null;
     private initPromise: Promise<void> | null = null;
+    private camera: Camera | null = null;
+    private cameraUniform: CameraUniform | null = null;
+    private cameraBuffer: GPUBuffer | null = null;
+    private cameraBindGroup: GPUBindGroup | null = null;
+    private renderPassDescriptor: GPURenderPassDescriptor | null = null;
+    private context: GPUCanvasContext | null = null;
+    private pipeline: GPURenderPipeline | null = null;
+    private vertexBuffers: Array<GPUBuffer> = [];
+    private indexLists: Array<Uint16Array> = [];
+    private indexBuffers: Array<GPUBuffer> = [];
 
     constructor(canvasRef: HTMLCanvasElement) {
         this.canvasRef = canvasRef;
+    }
+
+    render() {
+        // update the camera
+        this.cameraUniform!.updateViewProj(this.camera!);
+        this.device!.queue.writeBuffer(this.cameraBuffer!, 0, this.cameraUniform!.viewProj)
+        // Get the current texture from the canvas context and
+        // set it as the texture to render to.
+        for (const attachment of this.renderPassDescriptor!.colorAttachments) {
+            attachment!.view = this.context!.getCurrentTexture().createView();
+        }
+
+        // make a command encoder to start encoding commands
+        const encoder = this.device!.createCommandEncoder({ label: 'our encoder' });
+
+        // make a render pass encoder to encode render specific commands
+        const pass = encoder.beginRenderPass(this.renderPassDescriptor!);
+        pass.setPipeline(this.pipeline!);
+        pass.setBindGroup(0, this.cameraBindGroup, []);
+        for (let i in this.vertexBuffers) {
+            const vertexBuffer = this.vertexBuffers[i];
+            const indices = this.indexLists[i];
+            const indexBuffer = this.indexBuffers[i];
+            pass.setVertexBuffer(0, vertexBuffer);
+            pass.setIndexBuffer(indexBuffer, 'uint16');
+            pass.drawIndexed(indices.length)  // call our vertex shader 
+
+        }
+        pass.end();
+        const commandBuffer = encoder.finish();
+        this.device!.queue.submit([commandBuffer]);
     }
 
     async init() {
@@ -30,18 +71,18 @@ export class Renderer {
         }
 
         // get webGPU context from canvas & configure it
-        const context = this.canvasRef.getContext('webgpu');
+        this.context = this.canvasRef.getContext('webgpu');
         const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-        context?.configure({
+        this.context?.configure({
             device,
             format: presentationFormat,
         });
 
-        const renderPassDescriptor: GPURenderPassDescriptor = {
+        this.renderPassDescriptor = {
             label: 'basic debug render pass',
             colorAttachments: [
                 {
-                    view: context!.getCurrentTexture().createView(),
+                    view: this.context!.getCurrentTexture().createView(),
                     clearValue: [0.3, 0.3, 0.3, 1],
                     loadOp: 'clear',
                     storeOp: 'store',
@@ -57,9 +98,9 @@ export class Renderer {
         const meshJson = await load3dm() as any;
 
 
-        const vertexBuffers: Array<GPUBuffer> = [];
-        const indexBuffers: Array<GPUBuffer> = [];
-        const indexLists: Array<Uint16Array> = [];
+        this.vertexBuffers = [];
+        this.indexBuffers = [];
+        this.indexLists = [];
         for (let i in meshJson) {
             let positionData = new Float32Array(meshJson[i].data.attributes.position.array);
             let normalData = new Float32Array(meshJson[i].data.attributes.normal.array);
@@ -94,77 +135,26 @@ export class Renderer {
                 mergedData[j * 8 + 7] = uvData[j * 2 + 1];
             }
 
-            indexLists.push(indices);
-            vertexBuffers.push(vertexBuffer);
-            indexBuffers.push(indexBuffer);
+            this.indexLists.push(indices);
+            this.vertexBuffers.push(vertexBuffer);
+            this.indexBuffers.push(indexBuffer);
             device.queue.writeBuffer(vertexBuffer, 0, mergedData);
             device.queue.writeBuffer(indexBuffer, 0, indices);
         }
 
-        const camera = new Camera(this.canvasRef.width / this.canvasRef.height);
-        const cameraUniform = new CameraUniform();
-        cameraUniform.updateViewProj(camera);
+        this.camera = new Camera(this.canvasRef.width / this.canvasRef.height);
+        this.cameraUniform = new CameraUniform();
+        this.cameraUniform.updateViewProj(this.camera);
 
-        const cameraBuffer = device.createBuffer({
-            label: "Camera Buffer",
-            size: cameraUniform.viewProj.byteLength,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
+        this.cameraBuffer = this.cameraUniform.makeBuffer(device);
 
-        const cameraBindGroupLayout = device.createBindGroupLayout({
-            entries: [
-                {
-                    binding: 0,
-                    visibility: GPUShaderStage.VERTEX,
-                    buffer: {
-                        hasDynamicOffset: false,
-                        type: 'uniform'
-                    },
-                }
-            ],
-            label: "camera bind group layout",
-        });
+        const cameraBindGroupLayout = CameraUniform.makeBindGroupLayout(device);
 
-        const cameraBindGroup = device.createBindGroup({
-            layout: cameraBindGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: cameraBuffer,
-                }
-            ],
-            label: "camera bind group",
-        });
+        this.cameraBindGroup = CameraUniform.makeBindGroup(device, cameraBindGroupLayout, this.cameraBuffer);
+        console.log("view projection: " + Array.from(this.cameraUniform.viewProj))
 
-        const pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout]);
 
-        function render(canvas: HTMLCanvasElement, device: GPUDevice) {
-            // Get the current texture from the canvas context and
-            // set it as the texture to render to.
-            for (const attachment of renderPassDescriptor.colorAttachments) {
-                attachment!.view = context!.getCurrentTexture().createView();
-            }
-
-            // make a command encoder to start encoding commands
-            const encoder = device!.createCommandEncoder({ label: 'our encoder' });
-
-            // make a render pass encoder to encode render specific commands
-            const pass = encoder.beginRenderPass(renderPassDescriptor);
-            pass.setPipeline(pipeline);
-            pass.setBindGroup(0, cameraBindGroup, []);
-            for (let i in vertexBuffers) {
-                const vertexBuffer = vertexBuffers[i];
-                const indices = indexLists[i];
-                const indexBuffer = indexBuffers[i];
-                pass.setVertexBuffer(0, vertexBuffer);
-                pass.setIndexBuffer(indexBuffer, 'uint16');
-                pass.drawIndexed(indices.length)  // call our vertex shader 
-
-            }
-            pass.end();
-            const commandBuffer = encoder.finish();
-            device!.queue.submit([commandBuffer]);
-        }
+        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout]);
 
 
 
@@ -179,7 +169,8 @@ export class Renderer {
                     canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
                 }
             }
-            render(this.canvasRef, this.device!);
+            this.render();
+
         });
 
         observer.observe(this.canvasRef);
@@ -190,4 +181,5 @@ export class Renderer {
         this.device = null;
         this.initPromise = null;
     }
+
 }
