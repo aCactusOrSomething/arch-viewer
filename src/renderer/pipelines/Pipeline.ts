@@ -1,8 +1,16 @@
-export default function getPipeline(device: GPUDevice, presentationFormat: GPUTextureFormat, module: GPUShaderModule) {
+export default function getPipeline(
+    device: GPUDevice,
+    presentationFormat: GPUTextureFormat,
+    module: GPUShaderModule,
+    bindGroupLayouts: GPUBindGroupLayout[]
+) {
+    const pipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: bindGroupLayouts
+    });
 
     const pipeline = device.createRenderPipeline({
         label: 'debug pipeline',
-        layout: 'auto',
+        layout: pipelineLayout,
         vertex: {
             entryPoint: 'vs',
             module: module,

@@ -1,4 +1,5 @@
 import { load3dm } from "../loader/Loader";
+import { Camera, CameraUniform } from "./Camera";
 import getPipeline from "./pipelines/Pipeline";
 import shader from './shaders/shader.wgsl?raw'
 
@@ -64,12 +65,14 @@ export class Renderer {
             let normalData = new Float32Array(meshJson[i].data.attributes.normal.array);
             let uvData = new Float32Array(meshJson[i].data.attributes.uv.array);
             const vertexBuffer = device.createBuffer({
+                label: `vertex buffer for mesh ${i}`,
                 size: positionData.byteLength + normalData.byteLength + uvData.byteLength,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
             });
             const indices = new Uint16Array(meshJson[i].data.index.array);
 
             const indexBuffer = device.createBuffer({
+                label: `index buffer for mesh ${i}`,
                 size: indices.byteLength,
                 usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
             });
@@ -78,7 +81,7 @@ export class Renderer {
             const count = positionData.length / 3;
             const mergedData = new Float32Array(count * 8);
 
-            for(let j = 0; j < count; j++) {
+            for (let j = 0; j < count; j++) {
                 mergedData[j * 8 + 0] = positionData[j * 3 + 0];
                 mergedData[j * 8 + 1] = positionData[j * 3 + 1];
                 mergedData[j * 8 + 2] = positionData[j * 3 + 2];
@@ -86,7 +89,7 @@ export class Renderer {
                 mergedData[j * 8 + 3] = normalData[j * 3 + 0];
                 mergedData[j * 8 + 4] = normalData[j * 3 + 1];
                 mergedData[j * 8 + 5] = normalData[j * 3 + 2];
-                
+
                 mergedData[j * 8 + 6] = uvData[j * 2 + 0];
                 mergedData[j * 8 + 7] = uvData[j * 2 + 1];
             }
@@ -98,9 +101,42 @@ export class Renderer {
             device.queue.writeBuffer(indexBuffer, 0, indices);
         }
 
+        const camera = new Camera(this.canvasRef.width / this.canvasRef.height);
+        const cameraUniform = new CameraUniform();
+        cameraUniform.updateViewProj(camera);
 
+        const cameraBuffer = device.createBuffer({
+            label: "Camera Buffer",
+            size: cameraUniform.viewProj.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
 
-        const pipeline = getPipeline(device, presentationFormat, module);
+        const cameraBindGroupLayout = device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.VERTEX,
+                    buffer: {
+                        hasDynamicOffset: false,
+                        type: 'uniform'
+                    },
+                }
+            ],
+            label: "camera bind group layout",
+        });
+
+        const cameraBindGroup = device.createBindGroup({
+            layout: cameraBindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: cameraBuffer,
+                }
+            ],
+            label: "camera bind group",
+        });
+
+        const pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout]);
 
         function render(canvas: HTMLCanvasElement, device: GPUDevice) {
             // Get the current texture from the canvas context and
@@ -115,6 +151,7 @@ export class Renderer {
             // make a render pass encoder to encode render specific commands
             const pass = encoder.beginRenderPass(renderPassDescriptor);
             pass.setPipeline(pipeline);
+            pass.setBindGroup(0, cameraBindGroup, []);
             for (let i in vertexBuffers) {
                 const vertexBuffer = vertexBuffers[i];
                 const indices = indexLists[i];
