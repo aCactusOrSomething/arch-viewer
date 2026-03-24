@@ -66,10 +66,10 @@ export class CameraUniform {
         this.viewProj = camera.buildViewProjectionMatrix();
     }
 
-    makeBuffer(device: GPUDevice) {
+    makeBuffer(device: GPUDevice, camera: Camera) {
         return device.createBuffer({
             label: "Camera Buffer",
-            size: this.viewProj.byteLength,
+            size: camera.eye.byteLength + this.viewProj.byteLength + 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
@@ -79,7 +79,7 @@ export class CameraUniform {
             entries: [
                 {
                     binding: 0,
-                    visibility: GPUShaderStage.VERTEX,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                     buffer: {
                         hasDynamicOffset: false,
                         type: 'uniform'
@@ -102,12 +102,4 @@ export class CameraUniform {
             label: "camera bind group",
         });
     }
-}
-
-function magnitude(vec: Vec3) {
-    return Math.sqrt(
-        Math.pow(vec[0], 2) +
-        Math.pow(vec[1], 2) +
-        Math.pow(vec[2], 2)
-    )
 }

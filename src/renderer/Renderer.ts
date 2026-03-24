@@ -1,5 +1,6 @@
 import { load3dm } from "../loader/Loader";
 import { Camera, CameraUniform } from "./Camera";
+import { toBufferSource, type LightUniform } from "./Light";
 import getPipeline from "./pipelines/Pipeline";
 import shader from './shaders/shader.wgsl?raw'
 import { DepthTexture } from "./Texture";
@@ -18,6 +19,9 @@ export class Renderer {
     private indexLists: Array<Uint16Array> = [];
     private indexBuffers: Array<GPUBuffer> = [];
     private depthTexture: DepthTexture | null = null;
+    private lightUniform: LightUniform | null = null;
+    private lightBuffer: GPUBuffer | null = null;
+    private lightBindGroup: GPUBindGroup | null = null;
 
     constructor(canvasRef: HTMLCanvasElement) {
         this.canvasRef = canvasRef;
@@ -46,7 +50,8 @@ export class Renderer {
 
         // update the camera
         this.cameraUniform!.updateViewProj(this.camera!);
-        this.device!.queue.writeBuffer(this.cameraBuffer!, 0, this.cameraUniform!.viewProj)
+        this.device!.queue.writeBuffer(this.cameraBuffer!, 0, Float32Array.of(...this.camera!.eye, 0, ...this.cameraUniform!.viewProj));
+        this.device!.queue.writeBuffer(this.lightBuffer!, 0, toBufferSource(this.lightUniform!))
         // Get the current texture from the canvas context and
         // set it as the texture to render to.
         for (const attachment of renderPassDescriptor!.colorAttachments) {
@@ -62,6 +67,7 @@ export class Renderer {
         const pass = encoder.beginRenderPass(renderPassDescriptor);
         pass.setPipeline(this.pipeline!);
         pass.setBindGroup(0, this.cameraBindGroup, []);
+        pass.setBindGroup(1, this.lightBindGroup, []);
         for (let i in this.vertexBuffers) {
             const vertexBuffer = this.vertexBuffers[i];
             const indices = this.indexLists[i];
@@ -155,18 +161,50 @@ export class Renderer {
             device.queue.writeBuffer(vertexBuffer, 0, mergedData);
             device.queue.writeBuffer(indexBuffer, 0, indices);
         }
+        
+        // make light data
+        this.lightUniform = {
+            position: new Float32Array([0, 10, 40, 0]),
+            color: new Float32Array([1,1,1,1]),
+        } 
+
+        this.lightBuffer = device.createBuffer({
+            label: "Light Buffer",
+            size: this.lightUniform.position.byteLength + this.lightUniform.color.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        })
+
+        let lightBindGroupLayout = device.createBindGroupLayout({
+            entries: [{
+                binding: 0,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                buffer: {
+                    hasDynamicOffset: false,
+                    type: 'uniform',
+                },
+            }],
+            label: "Light Binding Group"
+        });
+
+        this.lightBindGroup = device.createBindGroup({
+            layout: lightBindGroupLayout,
+            entries: [{
+                binding: 0,
+                resource: this.lightBuffer
+            }],
+        })
 
         this.camera = new Camera(this.canvasRef.width / this.canvasRef.height);
         this.cameraUniform = new CameraUniform();
         this.cameraUniform.updateViewProj(this.camera);
 
-        this.cameraBuffer = this.cameraUniform.makeBuffer(device);
+        this.cameraBuffer = this.cameraUniform.makeBuffer(device, this.camera);
 
         const cameraBindGroupLayout = CameraUniform.makeBindGroupLayout(device);
 
         this.cameraBindGroup = CameraUniform.makeBindGroup(device, cameraBindGroupLayout, this.cameraBuffer);
 
-        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout]);
+        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout, lightBindGroupLayout]);
 
 
 
