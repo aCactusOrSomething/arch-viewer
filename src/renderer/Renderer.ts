@@ -2,7 +2,7 @@ import { load3dm } from "../loader/Loader";
 import { Camera, CameraUniform } from "./Camera";
 import { toBufferSource, type LightUniform } from "./Light";
 import getPipeline from "./pipelines/Pipeline";
-import shader from './shaders/shader.wgsl?raw'
+import shader from './shaders/principledShader.wgsl?raw'
 import { DepthTexture } from "./Texture";
 
 export class Renderer {
@@ -61,8 +61,6 @@ export class Renderer {
         // make a command encoder to start encoding commands
         const encoder = this.device!.createCommandEncoder({ label: 'our encoder' });
 
-
-
         // make a render pass encoder to encode render specific commands
         const pass = encoder.beginRenderPass(renderPassDescriptor);
         pass.setPipeline(this.pipeline!);
@@ -116,7 +114,6 @@ export class Renderer {
 
         const meshJson = await load3dm() as any;
 
-
         this.vertexBuffers = [];
         this.indexBuffers = [];
         this.indexLists = [];
@@ -161,12 +158,12 @@ export class Renderer {
             device.queue.writeBuffer(vertexBuffer, 0, mergedData);
             device.queue.writeBuffer(indexBuffer, 0, indices);
         }
-        
+
         // make light data
         this.lightUniform = {
             position: new Float32Array([0, 10, 40, 0]),
-            color: new Float32Array([1,1,1,1]),
-        } 
+            color: new Float32Array([1, 1, 1, 1]),
+        }
 
         this.lightBuffer = device.createBuffer({
             label: "Light Buffer",

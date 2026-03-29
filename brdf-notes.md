@@ -19,7 +19,7 @@
 - _sheen_: an additional grazing component, primarily intended for cloth.
 - _sheenTint_: amount to tint _sheen_ towards _baseColor_.
 - _clearcoatStrength_: A second, special-purpose specular lobe.
-- _clearcoatGloss_: Controlss clearcoat glossiness (0: a "satin" appearance, 1: a "gloss" appearance)
+- _clearcoatGloss_: Controls clearcoat glossiness (0: a "satin" appearance, 1: a "gloss" appearance)
 
 ### Vectors
 
@@ -35,6 +35,8 @@
 - _thetaL_: angle between _lightVector_ and _normalVector_
 - _thetaV_: angle between _viewVector_ and _normalVector_
 - _thetaH_: angle between _halfVector_ and _normalVector_
+
+_Remember that the dotproduct of two normalized vectors is equal to the cosine of the angle between those vectors. therefore, `cos(theta)` can be replaced with `A dot B`, where A and B are the normalized vectors that theta runs between._
 
 ### Other
 
@@ -104,3 +106,18 @@ __ClearcoatFunction__ = (__MicrofacetCC__ * __FresnelCC__ * __AttenuationCC__) /
 __BRDF__ = __DiffuseFunction__ * (1 - _metallic_) + __SpecularFunction__ * lerp(1, _baseColor_, _metallic_) + __ClearcoatFunction__
 
 __OutgoingLight__ = __BRDF__ * _lightColor_ * cos(_thetaL_)
+
+## Implementation
+
+I think it would be best to provide each parameter in two sections:
+- as a scalar uniform
+- as an optional texture which can modulate the scalar
+
+Textures would be:
+- _baseColor_ (should probably be its own texture, since it needs RGB components)
+- _metallic_ (B), _roughness_ (G) (standard as described in GLTF)
+- _specularStrength_, _specularTint_
+- _sheen_, _sheenTint_
+- _clearcoatStrength_, _clearcoatGloss_
+- _anisotropic_ 
+- _subsurface_

@@ -39,7 +39,7 @@ struct VertexOutput {
 }
 
 @fragment fn fs(input: VertexOutput) -> @location(0) vec4f {
-    let object_color: vec3<f32> = vec3f(input.tex_coords, 0.0);
+    let object_color: vec3<f32> = vec3f(0.5);
     let ambient_strength = 0.5;
     let ambient_color = light.color.xyz * ambient_strength;
     
