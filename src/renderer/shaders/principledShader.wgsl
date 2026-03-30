@@ -7,6 +7,13 @@ struct CameraUniform {
 @group(0)@binding(0)
 var<uniform> camera: CameraUniform;
 
+struct ModelUniform {
+    model: mat4x4<f32>,
+    model_inverse_transpose: mat4x4<f32>,
+};
+@group(0)@binding(1)
+var<uniform> model_uniform: ModelUniform;
+
 struct Light {
     position: vec4<f32>,
     color: vec4<f32>,
@@ -33,7 +40,9 @@ var<uniform> material_vals: MaterialVals;
 struct VertexInput {
     @location(0) position: vec3f,
     @location(1) normal: vec3f,
-    @location(2) uv: vec2f
+    @location(2) uv: vec2f,
+    @location(3) tangent: vec3f,
+    @location(4) bitangent: vec3f,
 }
 
 struct VertexOutput {
@@ -41,26 +50,32 @@ struct VertexOutput {
     @location(0) tex_coords: vec2<f32>,
     @location(1) world_normal: vec3<f32>,
     @location(2) world_position: vec3<f32>,
+    @location(3) tangent: vec3f,
+    @location(4) bitangent: vec3f,
 };
 
 @vertex fn vs(
-    model: VertexInput,
+    input: VertexInput,
 ) -> VertexOutput {
 
     var output: VertexOutput;
 
-    output.position = camera.view_proj * vec4f(model.position.xzy,  1.0);
-    output.tex_coords = model.uv;
-    output.world_normal = model.normal.xzy;
-    output.world_position = model.position.xzy;
+    output.position = camera.view_proj * vec4f(input.position.xzy,  1.0);
+    output.tex_coords = input.uv;
+    output.world_normal = normalize(
+        (model_uniform.model_inverse_transpose * vec4f(input.normal.xzy, 0.0)).xyz
+    );
+    output.world_position = (model_uniform.model * vec4f(input.position.xzy, 1.0)).xyz;
+    output.tangent = input.tangent.xzy;
+    output.bitangent = input.bitangent.xzy;
     return output;
 }
 
 @fragment fn fs(input: VertexOutput) -> @location(0) vec4f {
     var mat: MaterialVals;
-    mat.base_color = vec3f(0.5, 0.5, 0.5);
-    mat.subsurface = 0.005;
-    mat.metallic = 0.5;
+    mat.base_color = vec3f(1.0);
+    mat.subsurface = 0.5;
+    mat.metallic = 1;
     mat.specular_strength = 0.5;
     mat.specular_tint = 0.5;
     mat.roughness = 0.5;
@@ -75,13 +90,14 @@ struct VertexOutput {
     let view_dir = normalize(camera.view_pos.xyz - input.world_position);
     let reflect_dir = reflect(-light_dir, input.world_normal);
     let normal_dir = normalize(input.world_normal);
-    let half_dir = normalize(mix(light_dir, view_dir, 0.5));
-
+    let half_dir = normalize(light_dir + view_dir);
     // cosine
-    let cos_theta_d = dot(light_dir, half_dir);
-    let cos_theta_l = dot(light_dir, normal_dir);
-    let cos_theta_v = dot(view_dir, normal_dir);
-    let cos_theta_h = dot(half_dir, normal_dir); 
+    let cos_theta_d = max(dot(light_dir, half_dir), 0.0);
+    let cos_theta_l = max(dot(light_dir, normal_dir), 0.0);
+    let cos_theta_v = max(dot(view_dir, normal_dir), 0.0);
+    let cos_theta_h = max(dot(half_dir, normal_dir), 0.0); 
+    let cos_theta_ht = max(dot(half_dir, input.tangent), 0.0);
+    let cos_theta_hb = max(dot(half_dir, input.bitangent), 0.0);
 
     // angle (we dont need ALL the angles)
     let theta_d =  acos(cos_theta_d);
@@ -102,13 +118,13 @@ struct VertexOutput {
     let aspect = aspect(mat.anisotropic);
     let a_x = a_x(alpha, aspect);
     let a_y = a_y(alpha, aspect);
-    let microfacet = microfacet(a_x, a_y, half_dir, cos_theta_h);
-    let fresnel = fresnel(mat.specular_strength, theta_d);
+    let microfacet = microfacet(a_x, a_y, half_dir, cos_theta_h, cos_theta_ht, cos_theta_hb);
+    //let microfacet = microfacet(alpha, cos_theta_h);
+    let fresnel = fresnel(mat.specular_strength, cos_theta_d);
     let attenuation = attenuation(half_dir, light_dir, view_dir, alpha);
     let specular_color = specular_func(microfacet, fresnel, attenuation, cos_theta_l, cos_theta_v);
 
-    let result = (diffuse_color * (1 - mat.metallic) + specular_color * mix(vec3f(1.0), mat.base_color, mat.metallic));
-    //let result = specular_color;
+    let result = (diffuse_color * (1 - mat.metallic) + specular_color * mix(vec3f(1.0), mat.base_color, mat.metallic)) * light.color.xyz * cos_theta_l;
 
     return vec4f(result, 1);
 }
@@ -202,24 +218,32 @@ fn a_y(alpha: f32, aspect: f32) -> f32 {
     return alpha * aspect;
 }
 
+// anisotropic implementation
 fn microfacet(
     a_x: f32,
     a_y: f32,
     half_dir: vec3<f32>,
     cos_theta_h: f32,
+    cos_theta_ht: f32,
+    cos_theta_hb: f32,
 ) -> f32 {
-    return 1 / (
-        PI * a_x * a_y *
-        pow(
-            pow(half_dir.x, 2) / pow(a_x, 2) + 
-            pow(half_dir.y, 2) / pow(a_y, 2) + 
-            pow(cos_theta_h, 2),
-        2)
+    let denom = (
+        (cos_theta_ht * cos_theta_ht) / (a_x * a_x) +
+        (cos_theta_hb * cos_theta_hb) / (a_y * a_y) +
+        (cos_theta_h * cos_theta_h)
     );
+    return 1 / (PI * a_x * a_y * denom * denom);
 }
 
-fn fresnel(specular_strength: f32, theta_d: f32) -> f32 {
-    return mix(specular_strength, 1, (1 - theta_d));
+// isotropic implementation 
+/*fn microfacet(alpha: f32, cos_theta_h: f32) -> f32 {
+    let a2 = alpha * alpha;
+    let denom = (cos_theta_h * cos_theta_h * (a2 - 1.0) + 1.0);
+    return a2 / (PI * denom * denom);
+}*/
+
+fn fresnel(specular_strength: f32, cos_theta_d: f32) -> f32 {
+    return specular_strength + (1.0 - specular_strength) * pow(1.0 - cos_theta_d, 5.0);
 }
 
 fn omega(x: f32) -> f32 {

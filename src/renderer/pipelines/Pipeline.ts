@@ -17,7 +17,7 @@ export default function getPipeline(
             entryPoint: 'vs',
             module: module,
             buffers: [{
-                arrayStride: 4 * 8,
+                arrayStride: 4 * 14,
                 attributes: [
                     {
                         shaderLocation: 0,
@@ -33,6 +33,16 @@ export default function getPipeline(
                         shaderLocation: 2,
                         offset: 4 * 3 * 2,
                         format: 'float32x2'
+                    },
+                    {
+                        shaderLocation: 3,
+                        offset: (4 * 3 * 2) + (4 * 2),
+                        format: 'float32x3',
+                    },
+                    {
+                        shaderLocation: 4,
+                        offset: (4 * 3 * 3) + (4 * 2),
+                        format: 'float32x3',
                     },
                 ],
 

@@ -1,9 +1,11 @@
+import { mat4 } from "wgpu-matrix";
 import { load3dm } from "../loader/Loader";
 import { Camera, CameraUniform } from "./Camera";
 import { toBufferSource, type LightUniform } from "./Light";
 import getPipeline from "./pipelines/Pipeline";
 import shader from './shaders/principledShader.wgsl?raw'
 import { DepthTexture } from "./Texture";
+import { computeTangents } from "../triangleMath";
 
 export class Renderer {
     canvasRef: HTMLCanvasElement
@@ -122,35 +124,49 @@ export class Renderer {
             let positionData = new Float32Array(segment.attributes.position.array);
             let normalData = new Float32Array(segment.attributes.normal.array);
             let uvData = ("uv" in segment.attributes) ? new Float32Array(segment.attributes.uv.array) : new Float32Array(segment.attributes.position.array.length);
+            const indices = new Uint16Array(meshJson[i].data.index.array);
+
+            let tans = computeTangents(positionData, normalData, uvData, indices);
+            let tanData = tans.tangents;
+            let bitanData = tans.bitangents;
+
+            // merge the data into one big array
+            const count = positionData.length / 3;
+            const mergedData = new Float32Array(count * 14);
+
+            for (let j = 0; j < count; j++) {
+                mergedData[j * 14 + 0] = positionData[j * 3 + 0];
+                mergedData[j * 14 + 1] = positionData[j * 3 + 1];
+                mergedData[j * 14 + 2] = positionData[j * 3 + 2];
+
+                mergedData[j * 14 + 3] = normalData[j * 3 + 0];
+                mergedData[j * 14 + 4] = normalData[j * 3 + 1];
+                mergedData[j * 14 + 5] = normalData[j * 3 + 2];
+
+                mergedData[j * 14 + 6] = uvData[j * 2 + 0];
+                mergedData[j * 14 + 7] = uvData[j * 2 + 1];
+
+                mergedData[j * 14 + 8] = tanData[j * 3 + 0];
+                mergedData[j * 14 + 9] = tanData[j * 3 + 1];
+                mergedData[j * 14 + 10] = tanData[j * 3 + 2];
+
+                mergedData[j * 14 + 11] = bitanData[j * 3 + 0];
+                mergedData[j * 14 + 12] = bitanData[j * 3 + 1];
+                mergedData[j * 14 + 13] = bitanData[j * 3 + 2];
+            }
+
+            // construct buffers
             const vertexBuffer = device.createBuffer({
                 label: `vertex buffer for mesh ${i}`,
-                size: positionData.byteLength + normalData.byteLength + uvData.byteLength,
+                size: positionData.byteLength + normalData.byteLength + uvData.byteLength + tanData.byteLength + bitanData.byteLength,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
             });
-            const indices = new Uint16Array(meshJson[i].data.index.array);
 
             const indexBuffer = device.createBuffer({
                 label: `index buffer for mesh ${i}`,
                 size: indices.byteLength,
                 usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
             });
-
-            // merge the data into one big array
-            const count = positionData.length / 3;
-            const mergedData = new Float32Array(count * 8);
-
-            for (let j = 0; j < count; j++) {
-                mergedData[j * 8 + 0] = positionData[j * 3 + 0];
-                mergedData[j * 8 + 1] = positionData[j * 3 + 1];
-                mergedData[j * 8 + 2] = positionData[j * 3 + 2];
-
-                mergedData[j * 8 + 3] = normalData[j * 3 + 0];
-                mergedData[j * 8 + 4] = normalData[j * 3 + 1];
-                mergedData[j * 8 + 5] = normalData[j * 3 + 2];
-
-                mergedData[j * 8 + 6] = uvData[j * 2 + 0];
-                mergedData[j * 8 + 7] = uvData[j * 2 + 1];
-            }
 
             this.indexLists.push(indices);
             this.vertexBuffers.push(vertexBuffer);
@@ -161,7 +177,7 @@ export class Renderer {
 
         // make light data
         this.lightUniform = {
-            position: new Float32Array([0, 10, 40, 0]),
+            position: new Float32Array([0, 11, 40, 0]),
             color: new Float32Array([1, 1, 1, 1]),
         }
 
@@ -195,11 +211,21 @@ export class Renderer {
         this.cameraUniform = new CameraUniform();
         this.cameraUniform.updateViewProj(this.camera);
 
+        // model uniform
+        const modelUniformBuffer = device.createBuffer({
+            size: 2 * 16 * 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        const identity = mat4.identity();
+        const identityData = new Float32Array([...identity, ...identity]);
+        device.queue.writeBuffer(modelUniformBuffer, 0, identityData);
+
         this.cameraBuffer = this.cameraUniform.makeBuffer(device, this.camera);
 
         const cameraBindGroupLayout = CameraUniform.makeBindGroupLayout(device);
 
-        this.cameraBindGroup = CameraUniform.makeBindGroup(device, cameraBindGroupLayout, this.cameraBuffer);
+        this.cameraBindGroup = CameraUniform.makeBindGroup(device, cameraBindGroupLayout, this.cameraBuffer, modelUniformBuffer);
 
         this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout, lightBindGroupLayout]);
 

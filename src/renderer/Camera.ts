@@ -84,19 +84,31 @@ export class CameraUniform {
                         hasDynamicOffset: false,
                         type: 'uniform'
                     },
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                    buffer: {
+                        hasDynamicOffset: false,
+                        type: 'uniform'
+                    },
                 }
             ],
             label: "camera bind group layout",
         });
     }
 
-    static makeBindGroup(device: GPUDevice, layout: GPUBindGroupLayout, buffer: GPUBuffer) {
+    static makeBindGroup(device: GPUDevice, layout: GPUBindGroupLayout, cameraBuffer: GPUBuffer, modelBuffer: GPUBuffer) {
         return device.createBindGroup({
             layout: layout,
             entries: [
                 {
                     binding: 0,
-                    resource: buffer,
+                    resource: cameraBuffer,
+                },
+                {
+                    binding: 1,
+                    resource: modelBuffer,
                 }
             ],
             label: "camera bind group",
