@@ -34,8 +34,15 @@ struct MaterialVals {
     clearcoat_strength: f32,
     clearcoat_gloss: f32,
 }
-@group(2)@binding(0)
-var<uniform> material_vals: MaterialVals;
+//@group(3)@binding(0)
+//var<uniform> material_vals: MaterialVals;
+
+// textures
+@group(2) @binding(0)
+var linear_sampler: sampler;
+@group(2) @binding(1)
+var base_color_tex: texture_2d<f32>;
+// ADD MORE TEXTURES HERE LATER!!!!
 
 struct VertexInput {
     @location(0) position: vec3f,
@@ -73,12 +80,12 @@ struct VertexOutput {
 
 @fragment fn fs(input: VertexOutput) -> @location(0) vec4f {
     var mat: MaterialVals;
-    mat.base_color = vec3f(1.0);
+    mat.base_color = textureSample(base_color_tex, linear_sampler, input.tex_coords).xyz;
     mat.subsurface = 0.5;
-    mat.metallic = 1;
+    mat.metallic = 0;
     mat.specular_strength = 0.5;
     mat.specular_tint = 0.5;
-    mat.roughness = 0.5;
+    mat.roughness = 1.0;
     mat.anisotropic = 0.5;
     mat.sheen =  0.5;
     mat.sheen_tint = 0.5;
@@ -124,10 +131,21 @@ struct VertexOutput {
     let attenuation = attenuation(half_dir, light_dir, view_dir, alpha);
     let specular_color = specular_func(microfacet, fresnel, attenuation, cos_theta_l, cos_theta_v);
 
-    let result = (diffuse_color * (1 - mat.metallic) + specular_color * mix(vec3f(1.0), mat.base_color, mat.metallic)) * light.color.xyz * cos_theta_l;
+    // clearcoat calcs
+    let alpha_cc = alpha_cc(mat.clearcoat_gloss);
+    let microfacet_cc = microfacet_cc(alpha_cc, cos_theta_h);
+    let fresnel_cc = fresnel_cc(mat.clearcoat_strength, cos_theta_d);
+    let attenuation_cc= attenuation_cc(half_dir, light_dir, view_dir, alpha_cc);
+    let clearcoat_color = clearcoat_func(microfacet_cc, fresnel_cc, attenuation_cc, cos_theta_l, cos_theta_v);
+
+    let result = (diffuse_color * (1 - mat.metallic) + specular_color * mix(vec3f(1.0), mat.base_color, mat.metallic) + clearcoat_color) * light.color.xyz * cos_theta_l;
 
     return vec4f(result, 1);
 }
+
+// ***********
+// * DIFFUSE *
+// ***********
 
 fn fd90(
     roughness: f32,
@@ -202,6 +220,10 @@ fn diffuse_func(
     return base_color * mix(burley_diffuse, vec3(subsurface_func), subsurface) + sheen_func;
 }
 
+// ************
+// * SPECULAR *
+// ************
+
 fn alpha(roughness: f32) -> f32 {
     return roughness * roughness;
 }
@@ -235,13 +257,6 @@ fn microfacet(
     return 1 / (PI * a_x * a_y * denom * denom);
 }
 
-// isotropic implementation 
-/*fn microfacet(alpha: f32, cos_theta_h: f32) -> f32 {
-    let a2 = alpha * alpha;
-    let denom = (cos_theta_h * cos_theta_h * (a2 - 1.0) + 1.0);
-    return a2 / (PI * denom * denom);
-}*/
-
 fn fresnel(specular_strength: f32, cos_theta_d: f32) -> f32 {
     return specular_strength + (1.0 - specular_strength) * pow(1.0 - cos_theta_d, 5.0);
 }
@@ -262,4 +277,31 @@ fn attenuation(half_dir: vec3f, light_dir: vec3f, view_dir: vec3f, alpha: f32) -
 
 fn specular_func(microfacet: f32, fresnel: f32, attenuation: f32, cos_theta_l: f32, cos_theta_v: f32) -> f32{
     return (microfacet * fresnel * attenuation) / (4 * cos_theta_l * cos_theta_v);
+}
+
+// *************
+// * CLEARCOAT *
+// *************
+
+fn alpha_cc(clearcoat_gloss: f32) -> f32 {
+    return mix(0.1, 0.001, clearcoat_gloss);
+}
+
+fn microfacet_cc(alpha_cc: f32, cos_theta_h: f32) -> f32 {
+    let a2 = alpha_cc * alpha_cc;
+    let denom = (cos_theta_h * cos_theta_h * (a2 - 1.0) + 1.0);
+    return a2 / (PI * denom * denom);
+}
+
+// these are just shells around the equivalent specular function, since they share implementation
+fn fresnel_cc(clearcoat_strength: f32, cos_theta_d: f32) -> f32 {
+    return fresnel(clearcoat_strength, cos_theta_d);
+}
+
+fn attenuation_cc(half_dir: vec3f, light_dir: vec3f, view_dir: vec3f, alpha_cc: f32) -> f32 {
+    return attenuation(half_dir, light_dir, view_dir, alpha_cc);
+}
+
+fn clearcoat_func(microfacet_cc: f32, fresnel_cc: f32, attenuation_cc: f32, cos_theta_l: f32, cos_theta_v: f32) -> f32{
+    return specular_func(microfacet_cc, fresnel_cc, attenuation_cc, cos_theta_l, cos_theta_v);
 }

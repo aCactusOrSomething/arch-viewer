@@ -1,4 +1,4 @@
-import { mat4, vec3, type Vec3 } from 'wgpu-matrix'
+import { mat4, vec3 } from 'wgpu-matrix'
 
 export class Camera {
     public eye: Float32Array;

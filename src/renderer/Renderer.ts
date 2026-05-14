@@ -6,6 +6,8 @@ import getPipeline from "./pipelines/Pipeline";
 import shader from './shaders/principledShader.wgsl?raw'
 import { DepthTexture } from "./Texture";
 import { computeTangents } from "../triangleMath";
+import { makeMaterialBindGroup, makeMaterialBindGroupLayout, RUSTY_METAL_MATERIAL } from "./Material";
+import { loadImageBitmap } from "webgpu-utils";
 
 export class Renderer {
     canvasRef: HTMLCanvasElement
@@ -15,6 +17,7 @@ export class Renderer {
     private cameraUniform: CameraUniform | null = null;
     private cameraBuffer: GPUBuffer | null = null;
     private cameraBindGroup: GPUBindGroup | null = null;
+    private materialBindGroup: GPUBindGroup | null = null;
     private context: GPUCanvasContext | null = null;
     private pipeline: GPURenderPipeline | null = null;
     private vertexBuffers: Array<GPUBuffer> = [];
@@ -68,6 +71,7 @@ export class Renderer {
         pass.setPipeline(this.pipeline!);
         pass.setBindGroup(0, this.cameraBindGroup, []);
         pass.setBindGroup(1, this.lightBindGroup, []);
+        pass.setBindGroup(2, this.materialBindGroup, []);
         for (let i in this.vertexBuffers) {
             const vertexBuffer = this.vertexBuffers[i];
             const indices = this.indexLists[i];
@@ -114,6 +118,27 @@ export class Renderer {
             code: shader,
         });
 
+        // SET UP MATERIAL
+        const materialBindGroupLayout = makeMaterialBindGroupLayout(device);
+        const sampler = device.createSampler();
+
+        // load texture(s)
+        const basecolor_source = await loadImageBitmap(RUSTY_METAL_MATERIAL.textureUrls.baseColor!);
+        const basecolor_texture = device.createTexture({
+            label: 'base color texture',
+            format: 'rgba8unorm',
+            size: [basecolor_source.width, basecolor_source.height],
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+        });
+        device.queue.copyExternalImageToTexture(
+            { source: basecolor_source, flipY: true},
+            { texture: basecolor_texture},
+            { width: basecolor_source.width, height: basecolor_source.height }
+        )
+        this.materialBindGroup = makeMaterialBindGroup(device, materialBindGroupLayout, sampler, basecolor_texture);
+        
+
+        // BUILD MESH
         const meshJson = await load3dm() as any;
 
         this.vertexBuffers = [];
@@ -227,9 +252,8 @@ export class Renderer {
 
         this.cameraBindGroup = CameraUniform.makeBindGroup(device, cameraBindGroupLayout, this.cameraBuffer, modelUniformBuffer);
 
-        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout, lightBindGroupLayout]);
 
-
+        this.pipeline = getPipeline(device, presentationFormat, module, [cameraBindGroupLayout, lightBindGroupLayout, materialBindGroupLayout]);
 
         const observer = new ResizeObserver(entries => {
             for (const entry of entries) {

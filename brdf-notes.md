@@ -75,7 +75,7 @@ __aY__ = __alpha__ * __aspect__
 
 __Microfacet__  = 1 / (___PI___  * __aX__ * __aY__ * ((_halfVector_ DOT _xComponent_)^2 / __aX__^2 + (_halfVector_ DOT _yComponent_)^2 /__aY__^2 + (_halfVector_ DOT _normalVector_)^2)^2)   
 
-__Fresnel__ = lerp(_specularStrength_, 1, (1 - _thetaD_))
+__Fresnel__ = specular_strength + (1.0 - specular_strength) * pow(1.0 - cos_theta_d, 5.0)
 
 __omega__(_x_) = (-1 + sqrt(1 + (1 / _x_^2))) / 2
 
@@ -93,7 +93,7 @@ __alphaCC__ = lerp(0.1, 0.001, _clearcoatGloss_)
 
 __MicrofacetCC__ = __alphaCC__^2 / (___PI___ * ((__alphaCC__^2 - 1) * cos(_thetaH_)^2 + 1)^2)
 
-__FresnelCC__ = lerp(_clearcoatStrength_, 1, (1 - _thetaD_))
+__FresnelCC__ = clearcoatStrength + (1.0 - clearcoatStrength) * pow(1.0 - cos_theta_d, 5.0)
 
 __Attenuation1CC__(_vectorH_, _vectorS_): 1 / (1 + __omega__((_vectorH_ DOT _vectorS_) / __alphaCC__ * sqrt(1 - (_vectorH_ DOT _vectorS_)^2)))
 
@@ -114,10 +114,13 @@ I think it would be best to provide each parameter in two sections:
 - as an optional texture which can modulate the scalar
 
 Textures would be:
-- _baseColor_ (should probably be its own texture, since it needs RGB components)
-- _metallic_ (B), _roughness_ (G) (standard as described in GLTF)
-- _specularStrength_, _specularTint_
-- _sheen_, _sheenTint_
-- _clearcoatStrength_, _clearcoatGloss_
-- _anisotropic_ 
-- _subsurface_
+- _baseColor_ (RGB)
+- _normal_ (RGB)
+- _metallic_ (B), _roughness_ (G)
+- _specularStrength_ (B), _specularTint_ (G)
+- _sheenStrength_ (B), _sheenTint_ (G)
+- _clearcoatStrength_ (B), _clearcoatGloss_ (G)
+- _anisotropic_ (grey)
+- _subsurface_ (grey)
+
+ 
