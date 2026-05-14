@@ -29,7 +29,7 @@ struct MaterialVals {
     specular_tint: f32,
     roughness: f32,
     anisotropic: f32,
-    sheen: f32,
+    sheen_strength: f32,
     sheen_tint: f32,
     clearcoat_strength: f32,
     clearcoat_gloss: f32,
@@ -42,7 +42,21 @@ struct MaterialVals {
 var linear_sampler: sampler;
 @group(2) @binding(1)
 var base_color_tex: texture_2d<f32>;
-// ADD MORE TEXTURES HERE LATER!!!!
+@group(2) @binding(2)
+var normal_map_tex: texture_2d<f32>;
+@group(2) @binding(3)
+var roughness_metallic_tex: texture_2d<f32>;
+@group(2) @binding(4)
+var specular_tex: texture_2d<f32>;
+@group(2) @binding(5)
+var sheen_tex: texture_2d<f32>;
+@group(2) @binding(6)
+var clearcoat_tex: texture_2d<f32>;
+@group(2) @binding(7)
+var anisotropic_tex: texture_2d<f32>;
+@group(2) @binding(8)
+var subsurface_tex: texture_2d<f32>;
+
 
 struct VertexInput {
     @location(0) position: vec3f,
@@ -81,22 +95,42 @@ struct VertexOutput {
 @fragment fn fs(input: VertexOutput) -> @location(0) vec4f {
     var mat: MaterialVals;
     mat.base_color = textureSample(base_color_tex, linear_sampler, input.tex_coords).xyz;
-    mat.subsurface = 0.5;
-    mat.metallic = 0;
-    mat.specular_strength = 0.5;
-    mat.specular_tint = 0.5;
-    mat.roughness = 1.0;
-    mat.anisotropic = 0.5;
-    mat.sheen =  0.5;
-    mat.sheen_tint = 0.5;
-    mat.clearcoat_strength = 0.5;
-    mat.clearcoat_gloss = 0.5;
+    
+    var r_m: vec2f = textureSample(roughness_metallic_tex, linear_sampler, input.tex_coords).gb;
+    mat.roughness = r_m.x;
+    mat.metallic = r_m.y;
+    
+    var spec: vec2f = textureSample(specular_tex, linear_sampler, input.tex_coords).gb;
+    mat.specular_tint = spec.x;
+    mat.specular_strength = spec.y;
+
+    var sheen: vec2f = textureSample(sheen_tex, linear_sampler, input.tex_coords).gb;
+    mat.sheen_tint = sheen.x;
+    mat.sheen_strength =  sheen.y;
+
+    var clearcoat: vec2f = textureSample(clearcoat_tex, linear_sampler, input.tex_coords).gb;
+    mat.clearcoat_gloss = clearcoat.x;
+    mat.clearcoat_strength = clearcoat.y;
+    
+    mat.anisotropic = textureSample(anisotropic_tex, linear_sampler, input.tex_coords).r;
+    mat.subsurface = textureSample(subsurface_tex, linear_sampler, input.tex_coords).r;
+
+    let tbn = mat3x3f(
+        normalize(input.tangent),
+        normalize(input.bitangent),
+        normalize(input.world_normal),
+    );
+
+    let normal_sample = textureSample(normal_map_tex, linear_sampler, input.tex_coords).xyz;
+    let tangent_space_normal = normal_sample * 2.0 - 1.0;
+    let world_normal = normalize(tbn * tangent_space_normal);
+
 
     // vectors
     let light_dir = normalize(light.position.xyz - input.world_position);
     let view_dir = normalize(camera.view_pos.xyz - input.world_position);
-    let reflect_dir = reflect(-light_dir, input.world_normal);
-    let normal_dir = normalize(input.world_normal);
+    let reflect_dir = reflect(-light_dir, world_normal);
+    let normal_dir = normalize(world_normal);
     let half_dir = normalize(light_dir + view_dir);
     // cosine
     let cos_theta_d = max(dot(light_dir, half_dir), 0.0);
@@ -116,7 +150,7 @@ struct VertexOutput {
     let fss = fss(fss90, cos_theta_l, cos_theta_v);
     let subsurface_func = subsurface_func(fss, cos_theta_l, cos_theta_v);
     let sheen_color = sheen_color(mat.base_color, mat.sheen_tint);
-    let sheen_func = sheen_func(mat.sheen, sheen_color, cos_theta_d);
+    let sheen_func = sheen_func(mat.sheen_strength, sheen_color, cos_theta_d);
     
     let diffuse_color = diffuse_func(mat.base_color, burley_diffuse, subsurface_func, mat.subsurface, sheen_func);
 
@@ -203,11 +237,11 @@ fn sheen_color(
 }
 
 fn sheen_func(
-    sheen: f32,
+    sheen_strength: f32,
     sheen_color: vec3<f32>,
     cos_theta_d: f32
 ) -> vec3<f32> {
-    return sheen_color * sheen * pow(1 - cos_theta_d, 5);
+    return sheen_color * sheen_strength * pow(1 - cos_theta_d, 5);
 }
 
 fn diffuse_func(

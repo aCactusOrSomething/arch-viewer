@@ -9,7 +9,7 @@ function App() {
 
   return (<>
     <h2>rhino 3dm model demo:</h2>
-    <canvas ref={canvasRef} />
+    <canvas ref={canvasRef} height={800} width={1280} />
     <i>(if you don't see a cool animal head logo, its not working.)</i>
   </>)
 }

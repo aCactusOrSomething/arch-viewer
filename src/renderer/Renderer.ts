@@ -6,7 +6,7 @@ import getPipeline from "./pipelines/Pipeline";
 import shader from './shaders/principledShader.wgsl?raw'
 import { DepthTexture } from "./Texture";
 import { computeTangents } from "../triangleMath";
-import { makeMaterialBindGroup, makeMaterialBindGroupLayout, RUSTY_METAL_MATERIAL } from "./Material";
+import { makeMaterialBindGroup, makeMaterialBindGroupLayout, processTextures, RUSTY_METAL_MATERIAL } from "./Material";
 import { loadImageBitmap } from "webgpu-utils";
 
 export class Renderer {
@@ -123,20 +123,8 @@ export class Renderer {
         const sampler = device.createSampler();
 
         // load texture(s)
-        const basecolor_source = await loadImageBitmap(RUSTY_METAL_MATERIAL.textureUrls.baseColor!);
-        const basecolor_texture = device.createTexture({
-            label: 'base color texture',
-            format: 'rgba8unorm',
-            size: [basecolor_source.width, basecolor_source.height],
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
-        });
-        device.queue.copyExternalImageToTexture(
-            { source: basecolor_source, flipY: true},
-            { texture: basecolor_texture},
-            { width: basecolor_source.width, height: basecolor_source.height }
-        )
-        this.materialBindGroup = makeMaterialBindGroup(device, materialBindGroupLayout, sampler, basecolor_texture);
-        
+        const textures = await processTextures(RUSTY_METAL_MATERIAL, device);
+        this.materialBindGroup = makeMaterialBindGroup(device, materialBindGroupLayout, sampler, textures);
 
         // BUILD MESH
         const meshJson = await load3dm() as any;
