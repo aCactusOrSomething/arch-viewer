@@ -69,9 +69,15 @@ export async function processTextures(material: Material, device: GPUDevice) {
         let key = entry[0];
         let val = entry[1];
         const source = await loadImageBitmap(val!);
+
+        // need a different format for baseColor texture
+        let format: GPUTextureFormat = 'rgba8unorm';
+        if(key === 'baseColor') {
+            format = 'rgba8unorm-srgb'
+        }
         const texture = device.createTexture({
             label: key + " texture",
-            format: 'rgba8unorm',
+            format: format,
             size: [source.width, source.height],
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
         });

@@ -99,7 +99,7 @@ struct VertexOutput {
     var r_m: vec2f = textureSample(roughness_metallic_tex, linear_sampler, input.tex_coords).gb;
     mat.roughness = r_m.x;
     mat.metallic = r_m.y;
-    
+        
     var spec: vec2f = textureSample(specular_tex, linear_sampler, input.tex_coords).gb;
     mat.specular_tint = spec.x;
     mat.specular_strength = spec.y;
@@ -111,7 +111,7 @@ struct VertexOutput {
     var clearcoat: vec2f = textureSample(clearcoat_tex, linear_sampler, input.tex_coords).gb;
     mat.clearcoat_gloss = clearcoat.x;
     mat.clearcoat_strength = clearcoat.y;
-    
+
     mat.anisotropic = textureSample(anisotropic_tex, linear_sampler, input.tex_coords).r;
     mat.subsurface = textureSample(subsurface_tex, linear_sampler, input.tex_coords).r;
 
@@ -122,6 +122,7 @@ struct VertexOutput {
     );
 
     let normal_sample = textureSample(normal_map_tex, linear_sampler, input.tex_coords).xyz;
+    
     let tangent_space_normal = normal_sample * 2.0 - 1.0;
     let world_normal = normalize(tbn * tangent_space_normal);
 
